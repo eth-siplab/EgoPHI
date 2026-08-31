@@ -7,9 +7,9 @@
 ___________
 
 Our model **EgoPHI** is the first vision-based model that estimates 3D forces and contact during interaction with articulated rigid objects. Given a single egocentric monocular RGB image and the object geometry, EgoPHI registers hand meshes to refine the object pose in a shared camera coordinate frame, and predicts dense per-vertex contact and force distributions over all meshes for physically grounded interaction reasoning.
-<p align="center">
+<div align="center">
 <img src="figures/teaser.png" width="1200">
-</p>
+</div>
 
 
 Abstract
