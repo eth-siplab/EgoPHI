@@ -1,6 +1,6 @@
 ## EgoPHI: Estimating 3D Hand-Object Contact and Force from Egocentric Vision (ECCV 2026)
 
-[Andela Ilic](), [Rachel Schuchert](), [Yijing Jiang]([https://jiaxi-jiang.com/](https://www.yijingjiang.com/)), [Christian Holz](https://www.christianholz.net)<br/>
+[Andela Ilic](), [Rachel Schuchert](), [Yijing Jiang](https://www.yijingjiang.com/), [Christian Holz](https://www.christianholz.net)<br/>
 
 [Sensing, Interaction & Perception Lab](https://siplab.org), Department of Computer Science, ETH Zürich, Switzerland <br/>
 
