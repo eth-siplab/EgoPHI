@@ -42,13 +42,13 @@ Code
 1. Create a new conda environment and install pytorch:
 
    ```bash
-   conda env create -f environment.yml python=3.8
+   conda env create -f environment.yml python=3.10
    conda activate egophi
    ```
 
-2. Download MANO body model from [MANO](https://mano.is.tue.mpg.de/). Put them in the `./data` folder.
-3. 
-4. Prepare test dataset
+2. Download [ARCTIC](https://github.com/zc-alexfan/arctic/blob/master/docs/data/README.md) dataset.
+3. Download [H2O](https://taeinkwon.com/projects/h2o/) dataset.
+4. 
 5. Download pretrained weights
 
    
