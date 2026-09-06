@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environments
+.venv/
+env/
+
+# Training artifacts / large data (see README for how to obtain these)
+checkpoints/*.pth
+evaluation_results/
+wandb/
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store

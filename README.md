@@ -37,52 +37,111 @@ EgoPHI's 3-stage pipeline:
 Code
 ----------
 
+#### Repository layout
+
+```
+config.py               central path/hyperparameter configuration (see below)
+general.py, angular.py  math utilities (rotation representations, etc.)
+utils.py                shared helpers (MANO edge graphs, bbox extraction, losses, ...)
+model.py                InteractionGNN model definition
+dataset_ARCTIC.py       ARCTIC dataset/dataloader (training + evaluation, incl. HAMER hands)
+dataset_H2O.py          H2O dataset/dataloader (evaluation only)
+train.py                training entry point (ARCTIC)
+evaluate_ARCTIC.py      evaluation entry point (ARCTIC val split)
+evaluate_H2O.py         evaluation entry point (H2O, cross-dataset generalization)
+arctic_preprocess.py    end-to-end ARCTIC preprocessing (resize, contacts, object pose, segmentation)
+h2o_preprocess.py       end-to-end H2O preprocessing (resize, vertices, object pose, contacts, masks)
+```
+
+Force simulation (the physics-based pipeline used to generate the dense force
+supervision described in the paper) is a separate, heavier pipeline and is
+**not** included here -- `arctic_preprocess.py`/`h2o_preprocess.py` assume the
+force-simulation outputs already exist at the paths configured in `config.py`
+(`FORCE_ROOT` / `H2O_FORCE_ROOT`).
+
 #### Dependencies
 
-1. Create a new conda environment and install pytorch:
+1. Create a new conda environment:
 
    ```bash
-   conda env create -f environment.yml python=3.10
+   conda env create -f environment.yml
    conda activate egophi
    ```
 
-2. Download [ARCTIC](https://github.com/zc-alexfan/arctic/blob/master/docs/data/README.md) dataset.
-3. Download [H2O](https://taeinkwon.com/projects/h2o/) dataset.
-4. 
-5. Download pretrained weights
+2. Clone [HACO_RELEASE](https://github.com/dqj5182/HACO_RELEASE) next to this repo (or anywhere) --
+   it provides the `lib.core.config` module `utils.py` imports for a couple of
+   shared loss/config utilities. Point `HACO_RELEASE_ROOT` at it if it isn't at
+   the default location (see Configuration below).
+3. Download the [ARCTIC](https://github.com/zc-alexfan/arctic/blob/master/docs/data/README.md) dataset.
+4. Download the [H2O](https://taeinkwon.com/projects/h2o/) dataset.
+5. Download pretrained weights from [here]() and place `best_EgoPHI.pth` (and
+   optionally `last_EgoPHI.pth`) under `checkpoints/`.
 
-   
-   1. Download pre-trained weights from [here]().
+#### Configuration
+
+All filesystem paths are centralized in `config.py` as module-level constants,
+each overridable with an environment variable so the same code runs
+unmodified on another machine. The ones you're most likely to need:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `EGOPHI_ROOT` | repo root | this file's directory |
+| `EGOPHI_DATA_ROOT` | preprocessed ARCTIC data root | `<DATA_ROOT>/arctic_data` |
+| `EGOPHI_DATA_ROOT_H2O` | H2O data root | see `config.py` |
+| `EGOPHI_H2O_CONTACTS_ROOT` | H2O contact-label root | see `config.py` |
+| `EGOPHI_HAMER_VERTS_ROOT` | off-the-shelf HAMER hand estimates (ARCTIC eval) | see `config.py` |
+| `EGOPHI_CHECKPOINT_DIR` | where checkpoints are read/written | `<repo>/checkpoints` |
+| `HACO_RELEASE_ROOT` | path to the cloned HACO_RELEASE dependency | `<repo>/../HACO_RELEASE` |
+| `ARCTIC_ROOT` | path to the upstream ARCTIC codebase (for segmentation rendering) | see `config.py` |
+
+Read `config.py` for the complete list and the expected on-disk data layout.
+
+#### Data preprocessing
+
+Preprocessing produces everything the datasets/dataloaders read (resized
+224px images, hand/object segmentation masks, object rotation/translation/
+articulation, contact labels) -- everything except force simulation, which
+is assumed to already be present (see above).
+
+```bash
+python arctic_preprocess.py     # runs all stages: resize, contacts, metadata, segmentation
+python h2o_preprocess.py        # runs all stages: resize, vertices, transforms, contacts, segmentation
+```
+
+Both scripts accept `--stages` to run a subset (e.g. `--stages metadata`),
+`--overwrite` to redo existing outputs, and root-path overrides -- run with
+`--help` for the full list.
+
+#### Training
+
+```bash
+python train.py
+```
+
+Trains `InteractionGNN` on the ARCTIC training split; the best/last
+checkpoints are written to `config.CHECKPOINT_DIR`.
 
 #### Evaluation
 
-To run the evaluation, we first process our test dataset by running:
-
-`python modules/dataset/preprocess.py`
-
-Then, we could run an evaluation of our model by
-
 ```bash
-python modules/evaluate/evaluator.py --network UIP\
-                    --ckpt_path /path/to/model.pt\
-                    --data_dir /path/to/preprocessed_dataset\
-                    --eval_trans\
-                    --normalize_uwb\
-                    --flush_cache\
-                    --add_guassian_noise\
-                    --model_args_file config/model_args.json\
-                    --eval_save_dir output/evaluation_res
+python evaluate_ARCTIC.py   # ARCTIC val split (s05)
+python evaluate_H2O.py      # H2O, cross-dataset generalization
 ```
 
-`/path/to/preprocessed_dataset` is the folder that contains the processed  data `test.pt` .
-
-#### Visualization
-
-`python visualizer/visualize_result.py --seq_res_path "data/result/[dataset_name]/[model_name]" --seq_id X`
+Both scripts read a checkpoint from `config.LEGACY_CHECKPOINT_PATH` if
+present, else `config.BEST_CHECKPOINT_PATH`, and write per-frame predictions
+under `evaluation_results/{arctic,h2o}/<sequence>/`. Useful overrides:
+`EGOPHI_EVAL_DEVICE`, `EGOPHI_EVAL_CHECKPOINT`, `EGOPHI_EVAL_OUTPUT_DIR`,
+`EGOPHI_EVAL_WORKERS`, and `EGOPHI_EVAL_MAX_SAMPLES` (stop after N samples,
+useful for a quick smoke test).
 
 Dataset
 ----------
-Please download our UIP-DB dataset from [Google Drive]().
+This project trains on [ARCTIC](https://github.com/zc-alexfan/arctic/blob/master/docs/data/README.md)
+and evaluates on both the ARCTIC held-out participant and [H2O](https://taeinkwon.com/projects/h2o/)
+for cross-dataset generalization -- see Dependencies above for download links,
+and Data preprocessing above for turning the raw downloads into the format
+the dataloaders expect.
 
 Citation
 ----------
