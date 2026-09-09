@@ -49,15 +49,16 @@ dataset_H2O.py          H2O dataset/dataloader (evaluation only)
 train.py                training entry point (ARCTIC)
 evaluate_ARCTIC.py      evaluation entry point (ARCTIC val split)
 evaluate_H2O.py         evaluation entry point (H2O, cross-dataset generalization)
+compute_metrics.py      contact/force metrics from saved predictions
+inspect_predictions.ipynb  visualize predictions for one chosen frame
 arctic_preprocess.py    end-to-end ARCTIC preprocessing (resize, contacts, object pose, segmentation)
 h2o_preprocess.py       end-to-end H2O preprocessing (resize, vertices, object pose, contacts, masks)
+force_sim/              SOFA physics simulation that generates ARCTIC's force supervision
 ```
 
-Force simulation (the physics-based pipeline used to generate the dense force
-supervision described in the paper) is a separate, heavier pipeline and is
-**not** included here -- `arctic_preprocess.py`/`h2o_preprocess.py` assume the
-force-simulation outputs already exist at the paths configured in `config.py`
-(`FORCE_ROOT` / `H2O_FORCE_ROOT`).
+For force supervision, run `force_sim/force_simulation_ARCTIC.py` (requires
+[SOFA](https://www.sofa-framework.org/) with the SofaPython3 plugin) before
+`arctic_preprocess.py`.
 
 #### Dependencies
 
@@ -100,8 +101,8 @@ Read `config.py` for the complete list and the expected on-disk data layout.
 
 Preprocessing produces everything the datasets/dataloaders read (resized
 224px images, hand/object segmentation masks, object rotation/translation/
-articulation, contact labels) -- everything except force simulation, which
-is assumed to already be present (see above).
+articulation, contact labels) -- run `force_sim/force_simulation_ARCTIC.py`
+first (see above) so force data is present.
 
 ```bash
 python arctic_preprocess.py     # runs all stages: resize, contacts, metadata, segmentation
@@ -134,6 +135,12 @@ under `evaluation_results/{arctic,h2o}/<sequence>/`. Useful overrides:
 `EGOPHI_EVAL_DEVICE`, `EGOPHI_EVAL_CHECKPOINT`, `EGOPHI_EVAL_OUTPUT_DIR`,
 `EGOPHI_EVAL_WORKERS`, and `EGOPHI_EVAL_MAX_SAMPLES` (stop after N samples,
 useful for a quick smoke test).
+
+Given those predictions and a matching folder of ground-truth `.pt` files,
+`python compute_metrics.py --predictions-dir <dir> --gt-dir <dir>` prints
+contact (precision/recall/F1/IoU) and force (masked MAE/RMSE, volumetric IoU)
+metrics. `inspect_predictions.ipynb` visualizes a single chosen frame's
+predictions instead of running the full evaluation.
 
 Dataset
 ----------

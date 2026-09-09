@@ -252,26 +252,6 @@ def main():
         if max_samples and sample_count >= max_samples:
             break
 
-        # ---- Ground truth (disabled by default, matching the original script) ----
-        # gt_left_force_vec = batch['force_vector']['left'].reshape(seq_len, -1, 3).cpu()
-        # gt_right_force_vec = batch['force_vector']['right'].reshape(seq_len, -1, 3).cpu()
-        # gt_obj_force_vec = batch['force_vector']['object'].reshape(seq_len, -1, 3).cpu()
-        # gt_left_force_mag = batch['forces']['left'].reshape(seq_len, -1).cpu()
-        # gt_right_force_mag = batch['forces']['right'].reshape(seq_len, -1).cpu()
-        # gt_obj_force_mag = batch['forces']['object'].reshape(seq_len, -1).cpu()
-        # gt_left_contact = batch['contacts']['left'].squeeze(3).reshape(seq_len, -1).cpu()
-        # gt_right_contact = batch['contacts']['right'].squeeze(3).reshape(seq_len, -1).cpu()
-        # gt_obj_contact = batch['contacts']['object'].squeeze(3).reshape(seq_len, -1).cpu()
-        # torch.save(gt_left_force_vec, os.path.join(save_dir, f'gt_left_force_vec_{frame_id}.pt'))
-        # torch.save(gt_right_force_vec, os.path.join(save_dir, f'gt_right_force_vec_{frame_id}.pt'))
-        # torch.save(gt_obj_force_vec, os.path.join(save_dir, f'gt_obj_force_vec_{frame_id}.pt'))
-        # torch.save(gt_left_force_mag, os.path.join(save_dir, f'gt_left_force_mag_{frame_id}.pt'))
-        # torch.save(gt_right_force_mag, os.path.join(save_dir, f'gt_right_force_mag_{frame_id}.pt'))
-        # torch.save(gt_obj_force_mag, os.path.join(save_dir, f'gt_obj_force_mag_{frame_id}.pt'))
-        # torch.save(gt_left_contact, os.path.join(save_dir, f'gt_left_contact_{frame_id}.pt'))
-        # torch.save(gt_right_contact, os.path.join(save_dir, f'gt_right_contact_{frame_id}.pt'))
-        # torch.save(gt_obj_contact, os.path.join(save_dir, f'gt_obj_contact_{frame_id}.pt'))
-
 
 if __name__ == '__main__':
     main()

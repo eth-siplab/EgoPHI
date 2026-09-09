@@ -67,14 +67,10 @@ def process_sequence(seq_folder, faces_left, faces_right, threshold, output_fold
     intent = "_".join(parts[1:-1])  # 'use_01'
     ID = parts[-1]  # 'retake'
 
-    
-    # Load object mesh
     mesh_path = os.path.join(MESH_ROOT, object_name, "mesh.obj")
     mesh = trimesh.load(mesh_path, process=False)
     faces = mesh.faces
 
-    # Load vertices
-    
     seq_p = os.path.join(PROCESSED_SEQS_ROOT, seq_folder.parent.name,f"{seq_name}.npy")
 
     if not os.path.exists(seq_p):
@@ -86,13 +82,11 @@ def process_sequence(seq_folder, faces_left, faces_right, threshold, output_fold
     vertices_left = data['cam_coord']['verts.left'][:, 0, :, :]
     vertices_right = data['cam_coord']['verts.right'][:, 0, :, :]
 
-    # Compute contacts
     object_forces_all, left_forces_all, right_forces_all = compute_contacts_with_penetration(
         vertices, vertices_left, vertices_right,
         faces, faces_left, faces_right, threshold
     )
 
-    # Save
     out_sid_folder = Path(output_folder) / seq_folder.parent.name
     out_sid_folder.mkdir(parents=True, exist_ok=True)
     np.save(out_sid_folder / f"{object_name}_{intent}_{ID}_object.npy", object_forces_all)
@@ -115,7 +109,6 @@ def main_single_sequence(root_folder, output_folder, faces_left, faces_right, th
         print(f"Sequence folder does not exist: {seq_folder}")
         return
 
-    # Run processing
     process_sequence(seq_folder, faces_left, faces_right, threshold, output_folder)
     print(f"Done processing {participant}/{seq_name}")
 
@@ -124,7 +117,6 @@ if __name__ == "__main__":
     output_folder = CONTACTS_ROOT
     threshold = 0.0025
 
-    # Load MANO once
     mano_path = MANO_ROOT
     import pickle
     with open(Path(mano_path) / "MANO_LEFT.pkl", "rb") as f:

@@ -163,7 +163,6 @@ def train_one_epoch(use_wandb, model, dataloader, optimizer, device, reg_loss_fo
         rgb_seq = batch['images'].squeeze(2).squeeze(1)
         object_seq = batch['obj_segmentation'].squeeze(2).squeeze(1)[:,0]
 
-        # GT hand vertices
         vert_left = batch['left_verts'].squeeze(1)
         vert_right = batch['right_verts'].squeeze(1)
 
@@ -197,13 +196,11 @@ def train_one_epoch(use_wandb, model, dataloader, optimizer, device, reg_loss_fo
         # x_stack: [B, 3, H, W]
         x_stack = rgb_seq
 
-        # Create hand centers (using mean of vertices)
         verts_l_center = torch.mean(vert_left, dim=1) # [B, 3]
         verts_r_center = torch.mean(vert_right, dim=1) # [B, 3]
 
         object_bboxes = extract_2d_bboxes(object_seq)
 
-        # Articulate object
         verts_articulated = apply_articulation_batch(
             vertices=obj_template_vert,
             part_ids=obj_part_ids,
@@ -299,27 +296,22 @@ def train_one_epoch(use_wandb, model, dataloader, optimizer, device, reg_loss_fo
         # --- Iterative pose losses ---
         loss_verts = F.mse_loss(verts_o_pred, world_verts) * 10 * 20
         
-        # New Iterative Pose Losses
         num_iters = all_pred_trans.shape[1]
-        
-        # Expand GT to match iterative predictions
+
         gt_t_expanded = t.unsqueeze(1).expand_as(all_pred_trans)
         gt_R_expanded = R.unsqueeze(1).expand_as(all_pred_rot)
-        
-        # Apply losses with linearly increasing weight (optional, but good)
+
         t_losses = []
         r_losses = []
         for i in range(num_iters):
             # Weight is (i+1) / num_iters, e.g., [0.33, 0.66, 1.0] for 3 iters
-            weight = (i + 1) / num_iters 
+            weight = (i + 1) / num_iters
             t_losses.append(
                 weight * translation_loss(all_pred_trans[:, i].unsqueeze(1), gt_t_expanded[:, i])
             )
             r_losses.append(
                 weight * rotation_loss(all_pred_rot[:, i].unsqueeze(1), gt_R_expanded[:, i])
             )
-        
-        # Average the weighted losses
         loss_t = torch.mean(torch.stack(t_losses)) * 10 * 12
         loss_r = torch.mean(torch.stack(r_losses)) / 1.4
 
@@ -378,23 +370,19 @@ def evaluate(use_wandb, model, dataloader, device, reg_loss_force, vcb_loss, reg
     total_loss_vertices = 0.0
 
 
-    # MANO hands
     mano_layer_right = ManoLayer(flat_hand_mean=False, side='right', use_pca=False, mano_root=config.MANO_ROOT)
     mano_layer_left = ManoLayer(flat_hand_mean=False, side='left', use_pca=False, mano_root=config.MANO_ROOT)
-    
+
     faces_r = mano_layer_right.th_faces
     faces_l = mano_layer_left.th_faces
-    
-    # Vertices of the canonical hand mesh
+
     verts_r = mano_layer_right.th_v_template.squeeze(0)
     verts_l = mano_layer_left.th_v_template.squeeze(0)
 
     for batch in tqdm(dataloader, desc="Evaluation"):
-        # Visual
         rgb_seq = batch['images'].squeeze(2).squeeze(1)
         object_seq = batch['obj_segmentation'].squeeze(2).squeeze(1)[:,0]
 
-        # GT hand vertices
         vert_left = batch['left_verts'].squeeze(1)
         vert_right = batch['right_verts'].squeeze(1)
 
@@ -427,13 +415,11 @@ def evaluate(use_wandb, model, dataloader, device, reg_loss_force, vcb_loss, reg
         # --- Input preparation ---
         x_stack = rgb_seq
 
-        # Create hand centers (using mean of vertices)
         verts_l_center = torch.mean(vert_left, dim=1) # [B, 3]
         verts_r_center = torch.mean(vert_right, dim=1) # [B, 3]
 
         object_bboxes = extract_2d_bboxes(object_seq)
 
-        # Articulate object
         verts_articulated = apply_articulation_batch(
             vertices=obj_template_vert,
             part_ids=obj_part_ids,
@@ -527,27 +513,22 @@ def evaluate(use_wandb, model, dataloader, device, reg_loss_force, vcb_loss, reg
         # --- Iterative pose losses ---
         loss_verts = F.mse_loss(verts_o_pred, world_verts) * 10 * 20
         
-        # New Iterative Pose Losses
         num_iters = all_pred_trans.shape[1]
-        
-        # Expand GT to match iterative predictions
+
         gt_t_expanded = t.unsqueeze(1).expand_as(all_pred_trans)
         gt_R_expanded = R.unsqueeze(1).expand_as(all_pred_rot)
-        
-        # Apply losses with linearly increasing weight (optional, but good)
+
         t_losses = []
         r_losses = []
         for i in range(num_iters):
             # Weight is (i+1) / num_iters, e.g., [0.33, 0.66, 1.0] for 3 iters
-            weight = (i + 1) / num_iters 
+            weight = (i + 1) / num_iters
             t_losses.append(
                 weight * translation_loss(all_pred_trans[:, i].unsqueeze(1), gt_t_expanded[:, i])
             )
             r_losses.append(
                 weight * rotation_loss(all_pred_rot[:, i].unsqueeze(1), gt_R_expanded[:, i])
             )
-        
-        # Average the weighted losses
         loss_t = torch.mean(torch.stack(t_losses)) * 10 * 12
         loss_r = torch.mean(torch.stack(r_losses)) / 1.4
 
@@ -650,7 +631,6 @@ def main():
     reg_loss = RegLoss()
     smooth_loss = SmoothRegLoss()
 
-    # Prepare MANO edges once
     hand_edges_left, hand_edges_right, hand_normals_left, hand_normals_right, = prepare_mano_edges()
 
     model = InteractionGNN(d_model=512, n_head=4, num_pose_blocks=4, num_force_blocks=4,
@@ -723,7 +703,6 @@ def main():
     val_loader = DataLoader(dataset, batch_sampler=val_sampler, num_workers=num_workers, pin_memory=True, persistent_workers=True, prefetch_factor=1)
     print(f"{len(train_loader)} train batches per epoch")
 
-    # Resume from the last checkpoint if one exists (e.g. after a preemption).
     model, optimizer, start_epoch, best_val_loss = load_checkpoint_if_exists(
         config.LAST_CHECKPOINT_PATH, model, optimizer, device
     )
@@ -731,7 +710,6 @@ def main():
     for epoch in range(start_epoch, num_epochs):
         print('Epoch  ', epoch)
         
-        # Train
         train_loss = train_one_epoch(use_wandb, model, train_loader, optimizer, device, reg_loss_force, vcb_loss, reg_loss, smooth_loss, is_distributed,
         hand_edges_left.to(device), hand_edges_right.to(device), hand_normals_left.to(device), hand_normals_right.to(device), num_vertices_to_render, epoch
         )

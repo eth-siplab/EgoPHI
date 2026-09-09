@@ -71,6 +71,16 @@ HACO_CONTACTS_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "HACO_con
 OBJECT_CONTACT_STATS_DIR = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "object_contact_stats")
 OBJECT_MEANS_DIR = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "object_means")
 FORCE_MEANS_DIR = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "force_means")
+
+# Global max force magnitudes used to normalize ARCTIC forces to [0, 1] --
+# empirically measured over the ARCTIC force dataset, kept as a named
+# constant instead of an inline magic number. Do not change these without
+# re-checking what any existing trained model expects.
+ARCTIC_FORCE_MAX_MAGNITUDE = {
+    'left': 40786.97325154768,
+    'right': 39529.099847565725,
+    'object': 10540.6126048457,
+}
 SOFA_FORCE_LOG_MAGNITUDE_STATS_JSON = os.path.join(PROJECT_ROOT, "SOFA_force_log_magnitude_stats.json")
 
 # --- Checkpoint filenames ----------------------------------------------------

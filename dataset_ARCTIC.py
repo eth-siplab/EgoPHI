@@ -28,7 +28,6 @@ def mask_forces_with_contacts(forces: np.ndarray, contacts: np.ndarray, aLL_F, a
             f"{total_len}"
         )
 
-    # Broadcast contacts (num_frames, num_vertices, 1) -> (num_frames, num_vertices, 3)
     return forces * contacts
 
 def get_total_memory_usage_mb():
@@ -97,11 +96,9 @@ class ArcticSequenceDataset(Dataset):
         json_path = config.SOFA_FORCE_LOG_MAGNITUDE_STATS_JSON
         self.haco_root = config.HACO_CONTACTS_ROOT
 
-        # Load JSON
         with open(json_path, "r") as f:
             self.stats = json.load(f)
 
-        # Preload contacts in __init__
         self.cached_contacts = {}
         self.cached_forces = {}
 
@@ -131,22 +128,14 @@ class ArcticSequenceDataset(Dataset):
                 forces_dict = {}
 
                 for suffix in ['left', 'right', 'object']:
-                    # Contact .npy path
                     contact_path = os.path.join(self.contacts_root, participant, f"{object_name}_{suffix}.npy")
                     contacts_dict[suffix] = contact_path
-                    
-                    # Force folder and sorted file paths
+
                     force_folder = os.path.join(self.force_root, participant, f"{object_name}_{suffix}")
                     force_files = []
-                    # Get all candidate files
                     all_files = sorted(os.listdir(force_folder))
 
-                    # if (participant == 's06' and object_name == 'scissors_use_01') or (participant == 's04' and object_name == 'scissors_use_01') or (participant == 's07' and object_name == 'scissors_use_02') or (participant == 's10' and object_name == 'scissors_use_02') or (participant == 's09' and object_name == 'scissors_use_04') or (participant == 's01' and object_name == 'scissors_use_01') or (participant == 's06' and object_name == 'scissors_grab_01') or (participant == 's02' and object_name == 'scissors_use_02') or (participant == 's08' and object_name == 'scissors_use_03') or (participant == 's05' and object_name == 'scissors_use_02') or (participant == 's05' and object_name == 'scissors_use_01_retake_object'):
-                    #     print('TOTAL ************************************************************************      ', participant, object_name, len(all_files))
-
-                    # Drop the last file
                     for f in all_files:
-                    #for f in os.listdir(force_folder):
                         if not f.startswith("forces_") or not f.endswith(".npy"):
                             continue
                         file_path = os.path.join(force_folder, f)
@@ -162,13 +151,13 @@ class ArcticSequenceDataset(Dataset):
                         force_files.append(file_path)
                         try:
                             arr = np.load(file_path)
-                            if np.isfinite(arr).all():  # Only keep files with no NaN/Inf
+                            if np.isfinite(arr).all():
                                 continue
                             else:
                                 parts = file_path.split(os.sep)
                                 skipped_participant = parts[-3]
                                 skipped_object = parts[-2].replace(f"_{suffix}", "")
-                                frame_id = int(os.path.basename(file_path).split("_")[1].split(".")[0])  # 150
+                                frame_id = int(os.path.basename(file_path).split("_")[1].split(".")[0])
                                 self.to_skip.append((skipped_participant, skipped_object, frame_id))
                         except Exception as e:
                             parts = file_path.split(os.sep)
@@ -177,20 +166,15 @@ class ArcticSequenceDataset(Dataset):
                             frame_id = int(os.path.basename(file_path).split("_")[1].split(".")[0])
                             self.to_skip.append((skipped_participant, skipped_object, frame_id))
 
-                    # # Sort the remaining "good" files
                     force_files = sorted(
                         force_files,
                         key=lambda x: int(os.path.basename(x).split("_")[1].split(".")[0])
                     )
-
-                    # print('AFTER REMOVING ************************************************************************      ', len(force_files))
                     forces_dict[suffix] = force_files
-
 
                 self.cached_contacts[(participant, object_name)] = contacts_dict
                 self.cached_forces[(participant, object_name)] = forces_dict
 
-        
         skipped_set = set(self.to_skip)
 
         self.segmentation_cache = {}
@@ -201,24 +185,20 @@ class ArcticSequenceDataset(Dataset):
                 for cam in self.cameras:
                     obj_folder = f"{participant}_{object_name}_{cam}"
                     seg_root = os.path.join(self.segment_root, obj_folder, "images")
-                    
+
                     seg_masks = {}
                     for suffix in ['left', 'right', 'object']:
                         mask_folder = os.path.join(seg_root, f"mask_{suffix}")
                         all_masks = sorted(glob.glob(os.path.join(mask_folder, "*.png")))
-                        
-                        # Filter out masks corresponding to skipped frames
+
                         filtered_masks = []
                         for path in all_masks:
-                            # Extract frame_id from file name, e.g., "mask_0150.png" -> 150
                             frame_id = int(os.path.basename(path).split(".")[0])
                             if (participant, object_name, frame_id) not in skipped_set:
                                 filtered_masks.append(path)
-                            #else:
-                                #print(f"Skipping {suffix} mask due to bad force: {path}")
-                        
+
                         seg_masks[suffix] = filtered_masks
-                    
+
                     self.segmentation_cache[(participant, object_name, cam)] = seg_masks
 
         # haco_contacts_cache would back _load_HACO_contacts, but that method
@@ -244,7 +224,7 @@ class ArcticSequenceDataset(Dataset):
                 for suffix in ['dists_norm_left', 'dists_norm_right', 'dists_norm_obj_left', 'dists_norm_obj_right']:
                     npy_path = os.path.join(self.distances_root, participant, f"{object_name}_1_{suffix}.npy")
                     if os.path.isfile(npy_path):
-                        dists_dict[suffix] = npy_path  # store path only
+                        dists_dict[suffix] = npy_path
                     else:
                         print(f"Warning: {npy_path} not found, skipping")
                 self.cached_distances[(participant, object_name)] = dists_dict
@@ -254,8 +234,6 @@ class ArcticSequenceDataset(Dataset):
         object_names = set(sample['object'] for sample in self.samples)
         for obj_name in object_names:
             coords, faces, edge_index, edge_weight, part_ids, pivot, vertex_normals = self._load_articulated_mesh(obj_name, hinge_weight=0.1)
-            
-            # Store in CPU memory; only expand to batch size later
             self.mesh_cache[obj_name] = {
                 'coords': coords,                 # [num_verts, 3]
                 'faces': torch.tensor(faces),     # [num_faces, 3]
@@ -266,11 +244,10 @@ class ArcticSequenceDataset(Dataset):
                 'vertex_normals': vertex_normals  # [num_verts, 3]
             }
 
-        # Pre-index all valid sequences
-        self.cached_images = {}  
+        self.cached_images = {}
         for (participant, object_name, cam), paths in self.cached_image_paths.items():
             self.cached_images[(participant, object_name, cam)] = paths
-        
+
 
     def _get_GT_valid_frame_indices(self, participant, object_name):
         """
@@ -281,7 +258,6 @@ class ArcticSequenceDataset(Dataset):
         if not os.path.isdir(folder):
             return []
 
-        # Collect all frame indices from .npy files
         files = glob.glob(os.path.join(folder, object_name, '*.pt'))
         candidate_indices = set()
 
@@ -309,42 +285,32 @@ class ArcticSequenceDataset(Dataset):
         samples = []
         skipped_set = set(self.to_skip)
 
-        # Participants: s01,...,s10
-        # Cache image paths
         self.cached_image_paths = {}  # (participant, object_name, cam) -> sorted list of paths
         for participant in self._list_participants(self.images_root):
             participant_path = os.path.join(self.images_root, participant)
             if not os.path.isdir(participant_path) or participant=='s03':
                 continue
 
-            # Objects
             for object_name in sorted(os.listdir(participant_path)):
                 object_path = os.path.join(participant_path, object_name)
                 if not os.path.isdir(object_path):
                     continue
 
-                # Check cameras
                 frame_counts = []
                 for cam in self.cameras:
                     cam_folder = os.path.join(object_path, cam)
                     if not os.path.isdir(cam_folder):
                         break
-                    # self.cached_image_paths[(participant, object_name, cam)] = sorted(glob.glob(os.path.join(cam_folder, '*.jpg')))
-                    # Get all jpg paths
                     all_jpgs = sorted(glob.glob(os.path.join(cam_folder, '*.jpg')))
-                    
-                    # Filter out skipped frames
+
                     filtered_jpgs = []
                     for path in all_jpgs:
-                        # Extract frame_id from file name, e.g., "frame_0150.jpg" -> 150
                         frame_id = int(os.path.basename(path).split(".")[0])
                         if (participant, object_name, frame_id) not in skipped_set:
                             filtered_jpgs.append(path)
-                        #else:
-                            #print(f"Skipping image due to bad force: {path}")
-                    
+
                     self.cached_image_paths[(participant, object_name, cam)] = filtered_jpgs
-                    
+
                     # Legacy quirk (kept for exact parity): this subtracts the GLOBAL
                     # `to_skip` count (bad force frames across ALL participants/objects)
                     # from THIS object's total force-file count, not a per-object count.
@@ -358,7 +324,7 @@ class ArcticSequenceDataset(Dataset):
                         len(self.cached_forces[(participant, object_name)]['left']) - len(self.to_skip)
                     ))
                     if len(valid_indices) == 0:
-                        continue  # skip if no valid frames
+                        continue
                     print('VALID VERTICES    ', len(valid_indices))
 
                     min_frames = len(valid_indices)
@@ -369,16 +335,10 @@ class ArcticSequenceDataset(Dataset):
                     proc_seqs_ok, proc_seqs_path = self._check_processed_seqs(participant, object_name)
 
                     if not contact_ok or not distance_ok or not proc_seqs_ok:
-                        # print('There is no contact or distance data for this sequence')
-                        # print('contact_path    ', contact_path, )
-                        # print('distance_path    ', distance_path)
-                        # print('proc_seqs_path    ', proc_seqs_path)
                         break
 
-                    #min_frames = min(frame_counts)
-
                     if min_frames < self.sequence_length:
-                        # Not enough frames: pad later in __getitem__
+                        # Not enough frames for a full chunk: keep it short and pad in __getitem__.
                         samples.append({
                             'participant': participant,
                             'object': object_name,
@@ -390,7 +350,6 @@ class ArcticSequenceDataset(Dataset):
                         })
 
                     else:
-                        # Enough frames: split into non-overlapping chunks
                         if self.overlap == 0:
                             num_chunks = min_frames // self.sequence_length
                             for chunk_idx in range(num_chunks):
@@ -420,8 +379,6 @@ class ArcticSequenceDataset(Dataset):
         return samples
 
     def _check_contact_files(self, participant, object_name):
-
-        # MY CONTACTS - MANUALLY ESTIMATED
         required_suffixes = [
             'left', 'right', 'object'
         ]
@@ -441,7 +398,7 @@ class ArcticSequenceDataset(Dataset):
             if not os.path.isfile(path):
                 return False, path
         return True, path
-    
+
     def _check_processed_seqs(self, participant, object_name):
         path = os.path.join(self.processed_seqs_root, participant, f"{object_name}.npy")
         if not os.path.isfile(path):
@@ -457,28 +414,22 @@ class ArcticSequenceDataset(Dataset):
         for i in frame_indices:
             frame_views = []
             for cam in self.cameras:
-                # Get cached path
                 img_path = self.cached_images[(participant, object_name, cam)][i]
-                
-                # Read image on-the-fly
                 img = read_image(img_path).float() / 255.0
-                
                 frame_views.append(img)
-            
+
             frame_views = torch.stack(frame_views)  # [num_cams, C, H, W]
             frames.append(frame_views)
-        
+
         return torch.stack(frames), img_path  # [seq_len, num_cams, C, H, W], last frame's image path
-        
+
 
     def _load_cam_int(self, participant):
         K_ego_path = os.path.join(self.subj_path, participant, "K_ego.npy")
         K_ego = np.load(K_ego_path)[0]
         return torch.tensor(K_ego)
-    
-    def _load_obj_R_T_arti(self, participant, object, start_idx, length):
 
-        # Paths
+    def _load_obj_R_T_arti(self, participant, object, start_idx, length):
         rot_path = os.path.join(self.subj_path, participant, f"{object}_rot_local_world.npy")
         trans_path = os.path.join(self.subj_path, participant, f"{object}_trans_local_world.npy")
         scale_path = os.path.join(self.subj_path, participant, f"{object}_scale_local_world.npy")
@@ -489,7 +440,6 @@ class ArcticSequenceDataset(Dataset):
         world2ego_path = os.path.join(self.subj_path, participant, f"{object}_world2ego.npy")
         bbox3d_path = os.path.join(self.subj_path, participant, f"{object}_bbox3d.npy")
 
-        # Load full arrays
         R_full = np.load(rot_path)
         T_full = np.load(trans_path)
         s_full = np.load(scale_path)
@@ -505,17 +455,9 @@ class ArcticSequenceDataset(Dataset):
         hamer_right_path = os.path.join(hamer_dir, f"vert_1.0_{start_idx:05d}.npy")
 
         num_frames = R_full.shape[0]
-
-        # Compute valid frame indices
-        num_frames = R_full.shape[0]
-
-        # Compute valid frame indices
         valid_frame_ids = [i for i in range(num_frames) if (participant, object, i) not in self.to_skip]
-
-        # Convert to array
         valid_frame_ids = np.array(valid_frame_ids, dtype=int)
 
-        # Select only valid frames
         R_clean = R_full[valid_frame_ids]
         T_clean = T_full[valid_frame_ids]
         s_clean = s_full[valid_frame_ids]
@@ -526,7 +468,6 @@ class ArcticSequenceDataset(Dataset):
         world2ego_clean = world2ego_full[valid_frame_ids]
         bbox3d_clean = bbox3d_full[valid_frame_ids]
 
-        # Now take the requested slice
         R = R_clean[start_idx : start_idx + length]
         T = T_clean[start_idx : start_idx + length]
         s = s_clean[start_idx : start_idx + length]
@@ -548,8 +489,6 @@ class ArcticSequenceDataset(Dataset):
         else:
             hamer_right = np.zeros_like(right_verts)
 
-
-        # Convert to torch tensors
         return (
             torch.tensor(R, dtype=torch.float32),
             torch.tensor(T, dtype=torch.float32),
@@ -569,7 +508,6 @@ class ArcticSequenceDataset(Dataset):
         cb_out = []
         obj1_out = []
 
-        # Prepare sorted list of image paths for each camera only once
         twohands = {}
         cb = {}
         obj1 = {}
@@ -587,7 +525,6 @@ class ArcticSequenceDataset(Dataset):
         for i in frame_indices:
             twohands_views = []
             for cam in self.cameras:
-                # Safely get the ith image for this camera
                 twohands_path = twohands[cam][i]
                 with Image.open(twohands_path) as img:
                     img = torch.tensor(np.array(img))
@@ -597,7 +534,6 @@ class ArcticSequenceDataset(Dataset):
 
             cb_views = []
             for cam in self.cameras:
-                # Safely get the ith image for this camera
                 cb_path = cb[cam][i]
                 with Image.open(cb_path) as img:
                     img = torch.tensor(np.array(img))
@@ -607,7 +543,6 @@ class ArcticSequenceDataset(Dataset):
 
             obj1_views = []
             for cam in self.cameras:
-                # Safely get the ith image for this camera
                 obj1_path = obj1[cam][i]
                 with Image.open(obj1_path) as img:
                     img = torch.tensor(np.array(img))
@@ -616,7 +551,7 @@ class ArcticSequenceDataset(Dataset):
             obj1_out.append(obj1_views)
 
         return torch.stack(twohands_out), torch.stack(cb_out), torch.stack(obj1_out)
-    
+
 
     def _load_ARCTIC_segmentations(self, participant, object_name, frame_indices):
         seg_cache = self.segmentation_cache
@@ -640,7 +575,7 @@ class ArcticSequenceDataset(Dataset):
             obj_out.append(torch.stack(obj_views))
 
         return torch.stack(left_out), torch.stack(right_out), torch.stack(obj_out)
-    
+
 
     def _load_HACO_contacts(self, participant, object_name, frame_indices):
         cache = self.haco_contacts_cache
@@ -650,21 +585,18 @@ class ArcticSequenceDataset(Dataset):
         left_files = {int(os.path.basename(f).split('_')[0]): f for f in contact_files['left']}
         right_files = {int(os.path.basename(f).split('_')[0]): f for f in contact_files['right']}
 
-        # Filter frame_indices to exclude frames in self.to_skip
         valid_frame_indices = [idx for idx in frame_indices if (participant, object_name, idx) not in self.to_skip]
 
         for idx in valid_frame_indices:
-            # Load left hand
             if idx in left_files:
                 left_tensor = torch.load(left_files[idx])
-                left_tensor = left_tensor.float()  
+                left_tensor = left_tensor.float()
             else:
                 left_tensor = torch.zeros(778, dtype=torch.float32)
 
-            # Load right hand
             if idx in right_files:
                 right_tensor = torch.load(right_files[idx])
-                right_tensor = right_tensor.float()  
+                right_tensor = right_tensor.float()
             else:
                 right_tensor = torch.zeros(778, dtype=torch.float32)
 
@@ -672,7 +604,7 @@ class ArcticSequenceDataset(Dataset):
             right_out.append(right_tensor)
 
         return torch.stack(left_out), torch.stack(right_out)
-    
+
     def _load_contacts(self, participant, object_name, start_idx, length):
         contact_data = {}
         force_data = {}
@@ -684,26 +616,20 @@ class ArcticSequenceDataset(Dataset):
         min_max_folder = os.path.join(self.min_max_magnitude_path, participant, object_name)
 
         for suffix in ['left', 'right', 'object']:
-            # Load contact slice from cached path
             contact_path = contacts_dict.get(suffix, None)
             if contact_path is None or not os.path.isfile(contact_path):
                 print(f"Warning: contact path {contact_path} not found, skipping")
                 continue
 
-            arr_contact = np.load(contact_path, mmap_mode='r')  # memory-map
+            arr_contact = np.load(contact_path, mmap_mode='r')
             total_len = len(arr_contact)
 
-            # Build valid frame indices within array bounds
             valid_frame_ids = [i for i in range(len(arr_contact)) if (participant, object_name, i) not in self.to_skip]
             valid_frame_ids = np.array(valid_frame_ids, dtype=int)
-
-
-            # Select only valid frames
             arr_contact_clean = arr_contact[valid_frame_ids]
 
-            # Now slice the requested sequence
             contact_data[suffix] = torch.from_numpy(arr_contact_clean[start_idx:start_idx+length]).float()
-            # Load force slice from cached paths
+
             force_files = forces_dict.get(suffix, [])
             if not force_files:
                 continue
@@ -714,31 +640,20 @@ class ArcticSequenceDataset(Dataset):
             ]
             if not force_files:
                 continue
-            # memory-map each force file
             all_forces = np.stack([np.load(f, mmap_mode='r') for f in force_files], axis=0)
 
-            # Mask with contacts
             all_forces_masked = mask_forces_with_contacts(all_forces, arr_contact_clean, force_files, contact_path, total_len)
             all_forces_masked = torch.from_numpy(all_forces_masked).float()
 
             # --- Force magnitude normalization (0 to 1) ---
-            # Global max magnitudes: {'left': 40786.97325154768, 'right': 39529.099847565725, 'object': 10540.6126048457}
             magnitudes = torch.norm(all_forces_masked, dim=2)  # [B, N_vertices]
-
-            # Known global max magnitudes
-            max_mags = {
-                'left': 40786.97325154768,
-                'right': 39529.099847565725,
-                'object': 10540.6126048457,
-            }
-
-            max_mag = max_mags[suffix]
-            norm_magnitude = torch.clamp(magnitudes / max_mag, 0.0, 1.0)  # scale to [0, 1]
+            max_mag = config.ARCTIC_FORCE_MAX_MAGNITUDE[suffix]
+            norm_magnitude = torch.clamp(magnitudes / max_mag, 0.0, 1.0)
 
             # --- Force vector normalization (-1 to 1) ---
             # Normalize to unit direction first, then clip (some directions may be slightly >1 due to noise)
             direction = all_forces_masked / (magnitudes.unsqueeze(-1) + 1e-8)
-            direction = torch.clamp(direction, -1.0, 1.0)  # ensure [-1, 1] range
+            direction = torch.clamp(direction, -1.0, 1.0)
 
             force_data[suffix] = norm_magnitude[start_idx:start_idx+length]
             force_vector[suffix] = direction[start_idx:start_idx+length]
@@ -748,40 +663,31 @@ class ArcticSequenceDataset(Dataset):
 
     def _load_distances(self, participant, object_name, start_idx, length):
         distance_data = {}
-        
-        # Retrieve cached paths
         dists_dict = self.cached_distances.get((participant, object_name), {})
-        
+
         for suffix, npy_path in dists_dict.items():
             if not os.path.isfile(npy_path):
                 print(f"Warning: {npy_path} not found, skipping")
                 continue
-
-            # Load only the requested slice
-            arr = np.load(npy_path, mmap_mode='r')  # memory-map to avoid loading full file
+            arr = np.load(npy_path, mmap_mode='r')
             distance_data[suffix] = torch.from_numpy(arr[start_idx:start_idx+length]).float()
-        
+
         return distance_data
 
-        
-    
+
     def stack_all(self, *args):
         return [torch.stack(x, dim=1) for x in args]
 
-    
-    # GT FROM ARCTIC
+
     def _load_GT_proc_seqs(self, participant, object_name, start_idx, length):
         folder = os.path.join(self.GT_mano_root, participant)
 
-        # Load one file to get number of frames
         pose_r = torch.load(os.path.join(folder, f"{object_name}_pose_r.pt"))
         num_f = pose_r.shape[0]
 
-        # Build valid frame indices within array bounds
         valid_frame_ids = [i for i in range(num_f) if (participant, object_name, i) not in self.to_skip]
         valid_frame_ids = torch.tensor(valid_frame_ids, dtype=torch.long)
 
-        # Load all arrays and select only valid frames
         pose_r = torch.load(os.path.join(folder, f"{object_name}_pose_r.pt"))[valid_frame_ids]
         rot_r = torch.load(os.path.join(folder, f"{object_name}_rot_r_cam.pt"))[valid_frame_ids]
         shape_r = torch.load(os.path.join(folder, f"{object_name}_shape_r.pt"))[valid_frame_ids]
@@ -794,7 +700,6 @@ class ArcticSequenceDataset(Dataset):
         trans_l = torch.load(os.path.join(folder, f"{object_name}_trans_l.pt"))[valid_frame_ids]
         theta_l = torch.cat([rot_l, pose_l], dim=1)
 
-        # Slice the requested sequence
         theta_r = theta_r[start_idx:start_idx+length]
         theta_l = theta_l[start_idx:start_idx+length]
         shape_r = shape_r[start_idx:start_idx+length]
@@ -878,7 +783,6 @@ class ArcticSequenceDataset(Dataset):
         th_left_hand_pose[:, :, 1:] = th_left_hand_pose[:, :, 1:] * -1
         th_left_pose_coeffs = torch.cat([th_left_gl_ori.unsqueeze(1), th_left_hand_pose], dim=1).reshape(-1, 48).to(pose_r.device)
 
-        # MANO forward pass (output in mm)
         th_verts_left_mm, _ = mano_layer_left(
             th_pose_coeffs=th_left_pose_coeffs,
             th_betas=th_shape_l,
@@ -890,8 +794,8 @@ class ArcticSequenceDataset(Dataset):
             th_pose_coeffs=th_right_pose_coeffs, th_betas=th_shape_r.to(pose_r.device), th_trans=th_trans_r.to(pose_r.device)
         )
 
-        # Convert HAMER vertices to meters, then rigidly translate to align
-        # with the GT hand centers.
+        # HAMER outputs millimeters; convert to meters before rigidly
+        # translating to align with the GT hand centers.
         th_verts_left_m = th_verts_left_mm / 1000.0
         th_verts_right_m = th_verts_right_mm / 1000.0
 
@@ -924,14 +828,12 @@ class ArcticSequenceDataset(Dataset):
         """
         obj_name = object_name.split('_')[0]
 
-        # --- Load whole mesh ---
         mesh_whole = trimesh.load(os.path.join(self.mesh_root, obj_name, "mesh.obj"))
         vertex_normals = torch.tensor(mesh_whole.vertex_normals)
         verts_whole = np.array(mesh_whole.vertices)
         faces_whole = np.array(mesh_whole.faces)
         pivot = torch.load(os.path.join(self.mesh_root, obj_name, "pivot.pt"))
 
-        # --- Load part IDs directly from JSON ---
         parts_path = os.path.join(self.mesh_root, obj_name, "parts.json")
         with open(parts_path, "r") as f:
             part_ids = torch.tensor(np.array(json.load(f), dtype=np.int64))
@@ -939,16 +841,13 @@ class ArcticSequenceDataset(Dataset):
         assert len(part_ids) == len(verts_whole), \
             f"parts.json length {len(part_ids)} does not match mesh vertices {len(verts_whole)}"
 
-        # --- Step 1: One-hot encode part membership ---
-        #part_ids_tensor = torch.from_numpy(part_ids).float().unsqueeze(1)  # [N, 1], values 0 or 1
-        coords = torch.from_numpy(verts_whole).float()                     # [N, 3]
+        coords = torch.from_numpy(verts_whole).float()
         center = coords.mean(dim=0, keepdim=True)
         scale = coords.abs().max()
         coords = (coords - center)/ scale
         pivot = (pivot - center)/ scale
-        #x = torch.cat([coords, part_ids_tensor], dim=-1)                   # [N, 4]
 
-        # --- Step 2: Build hinge-aware edges ---
+        # --- Build hinge-aware edges ---
         edges = np.array(mesh_whole.edges_unique)  # (E, 2)
 
         edge_list = []
@@ -961,20 +860,20 @@ class ArcticSequenceDataset(Dataset):
                 edge_list.append([u, v])
                 edge_weights.append(hinge_weight) # hinge connection
 
-        # --- Step 3: Convert to PyTorch Geometric format ---
+        # --- Convert to PyTorch Geometric format ---
         edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
-        edge_index = to_undirected(edge_index)  # make sure graph is undirected
+        edge_index = to_undirected(edge_index)
 
         edge_weight = torch.tensor(edge_weights, dtype=torch.float)
         edge_weight = torch.cat([edge_weight, edge_weight], dim=0)  # match undirected duplication
 
         return coords, faces_whole, edge_index, edge_weight, part_ids, pivot, vertex_normals
-    
+
     def pad_tensor_to_length(self, in_tensor, pad_amount):
         if pad_amount <= 0:
-            return in_tensor  
+            return in_tensor
 
-        last = in_tensor[-1:]  
+        last = in_tensor[-1:]
         repeat_shape = [pad_amount] + [1] * (last.dim() - 1)
         pad = last.repeat(*repeat_shape)
         return torch.cat([in_tensor, pad], dim=0)
@@ -987,18 +886,12 @@ class ArcticSequenceDataset(Dataset):
         length = sample['length']
         frame_indices = sample['frame_indices'][start_idx:start_idx+length]
 
-        # Load
         images, img_path = self._load_images(participant, object_name, frame_indices)
-        #twohands, cb, obj1 = self._load_segmentations(participant, object_name, frame_indices)
         left, right, obj = self._load_ARCTIC_segmentations(participant, object_name, frame_indices)
-        #haco_left, haco_right = self._load_HACO_contacts(participant, object_name, frame_indices)
         K_ego = self._load_cam_int(participant)
         (R, T, s, arti, world_verts, left_verts, right_verts, world2ego, bbox3d,
          hamer_left, hamer_right) = self._load_obj_R_T_arti(participant, object_name, start_idx, length)
         contacts, forces, force_vector = self._load_contacts(participant, object_name, start_idx, length)
-        # distances = self._load_distances(participant, object_name, start_idx, length)
-        #joint_right, joint_left, obj_vert = self._load_proc_seqs(participant, object_name, start_idx, length)
-        #theta_r, theta_l, shape_r, shape_l, trans_r, trans_l = self._load_GT_proc_seqs(participant, object_name, start_idx, length)
         if self.load_hamer:
             pose_r, rot_r, pose_l, rot_l, shape_r, shape_l, trans_r, trans_l = self._load_HAMER_verts_flexible(
                 participant, object_name, frame_indices)
@@ -1013,90 +906,63 @@ class ArcticSequenceDataset(Dataset):
         vertex_normals = mesh['vertex_normals'].unsqueeze(0).expand(sequence_len, -1, -1)
         K_ego = K_ego.unsqueeze(0).expand(self.sequence_length, -1, -1)
 
-        #print(images.shape, contacts['left_contact'].shape,contacts['right_contact'].shape, contacts['obj_contact_left'].shape, contacts['obj_contact_right'].shape, distances['dists_norm_left'].shape, distances['dists_norm_right'].shape, distances['dists_norm_obj_left'].shape, distances['dists_norm_obj_right'].shape, joint_right.shape, joint_left.shape, obj_vert.shape)
-        # Pad if needed
         if length < self.sequence_length:
             pad_amount = self.sequence_length - length
 
-            # Pad images (torch tensor)
             images = self.pad_tensor_to_length(images, pad_amount)
-
-            # Pad segmentations
-            # twohands = self.pad_tensor_to_length(twohands, pad_amount)
-            # cb = self.pad_tensor_to_length(cb, pad_amount)
-            # obj1 = self.pad_tensor_to_length(obj1, pad_amount)
-
             left = self.pad_tensor_to_length(left, pad_amount)
             right = self.pad_tensor_to_length(right, pad_amount)
             obj = self.pad_tensor_to_length(obj, pad_amount)
 
-            # Pad joints and obj vertices
-            # joint_right = pad_tensor_to_length(joint_right, pad_amount)
-            # joint_left = pad_tensor_to_length(joint_left, pad_amount)
-            # obj_vert = pad_tensor_to_length(obj_vert, pad_amount)
-            # theta_r = self.pad_tensor_to_length(theta_r, pad_amount)
-            # theta_l = self.pad_tensor_to_length(theta_l, pad_amount)
-            # shape_r = self.pad_tensor_to_length(shape_r, pad_amount)
-            # shape_l = self.pad_tensor_to_length(shape_l, pad_amount)
-            # trans_r = self.pad_tensor_to_length(trans_r, pad_amount)
-            # trans_l = self.pad_tensor_to_length(trans_l, pad_amount)
-
-            # Pad contacts (dict of numpy arrays -> torch tensors)
             for key in contacts:
-                last_contact = contacts[key][-1:]  # convert once
+                last_contact = contacts[key][-1:]
                 pad = last_contact.repeat(pad_amount, *[1]*(last_contact.dim()-1))
                 contacts[key] = torch.cat([contacts[key], pad], dim=0)
 
             for key in forces:
-                last_contact = forces[key][-1:]  # convert once
+                last_contact = forces[key][-1:]
                 pad = last_contact.repeat(pad_amount, *[1]*(last_contact.dim()-1))
                 forces[key] = torch.cat([forces[key], pad], dim=0)
 
             for key in force_vector:
-                last_contact = force_vector[key][-1:]  # convert once
+                last_contact = force_vector[key][-1:]
                 pad = last_contact.repeat(pad_amount, *[1]*(last_contact.dim()-1))
                 force_vector[key] = torch.cat([force_vector[key], pad], dim=0)
 
-            # # Pad distances (dict of numpy arrays -> torch tensors)
-            # for key in distances:
-            #     last_contact = distances[key][-1:]  # convert once
-            #     pad = last_contact.repeat(pad_amount, *[1]*(last_contact.dim()-1))
-            #     distances[key] = torch.cat([distances[key], pad], dim=0)
-
-            last_distance = R[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = R[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             R = torch.cat([R, pad_distance], dim=0)
 
-            last_distance = T[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = T[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             T = torch.cat([T, pad_distance], dim=0)
 
-            last_distance = s[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = s[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             s = torch.cat([s, pad_distance], dim=0)
-            
-            last_distance = arti[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+
+            last_distance = arti[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             arti = torch.cat([arti, pad_distance], dim=0)
 
-            last_distance = world_verts[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = world_verts[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             world_verts = torch.cat([world_verts, pad_distance], dim=0)
 
-            last_distance = left_verts[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = left_verts[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             left_verts = torch.cat([left_verts, pad_distance], dim=0)
 
-            last_distance = right_verts[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = right_verts[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             right_verts = torch.cat([right_verts, pad_distance], dim=0)
 
-            last_distance = world2ego[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = world2ego[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             world2ego = torch.cat([world2ego, pad_distance], dim=0)
 
-            last_distance = bbox3d[-1:]  # [1, ...]
-            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])  # [pad_amount, ...]
+            last_distance = bbox3d[-1:]
+            pad_distance = last_distance.expand(pad_amount, *last_distance.shape[1:])
             bbox3d = torch.cat([bbox3d, pad_distance], dim=0)
 
         item = {
@@ -1104,25 +970,20 @@ class ArcticSequenceDataset(Dataset):
             'left_segmentation': left,
             'right_segmentation': right,
             'obj_segmentation': obj,
-            # 'haco_left': haco_left,
-            # 'haco_right' : haco_right,
             'contacts': contacts,
             'forces' : forces,
             'force_vector' : force_vector,
-            # 'distances': distances,
             'obj_vert_template': template_vert,
             'obj_faces_template': template_faces,
             'obj_edges_template': template_edges,
             'obj_edges_weight': edge_weight,
             'obj_part_ids': part_ids,
-            'pivot' : pivot, 
+            'pivot' : pivot,
             'vertex_normals': vertex_normals,
             'participant': participant,
             'object': object_name,
-            # 'start_idx': sample['start_idx'],
             'proc_seqs_path': sample['proc_seqs_path'],
-            # 'total_frame_num': sample['total_frame_num'],
-            'K_ego': K_ego, 
+            'K_ego': K_ego,
             'bbox3d' : bbox3d,
             'R': R,
             'T': T,
@@ -1163,8 +1024,6 @@ class SameObjectBatchSampler(Sampler):
         self.shuffle = shuffle
         self.num_replicas = num_replicas
         self.rank = rank
-
-        # Precompute all batch indices
         self.all_batches = self._generate_batches()
 
     def _generate_batches(self):
@@ -1180,7 +1039,7 @@ class SameObjectBatchSampler(Sampler):
                 all_batches.append(obj_indices[i:i + self.batch_size])
 
         if self.shuffle:
-            random.shuffle(all_batches)  # <-- shuffle final batch order
+            random.shuffle(all_batches)
         return all_batches
 
     def __iter__(self):

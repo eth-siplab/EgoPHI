@@ -183,7 +183,7 @@ def extract_rot_trans_arti(processed_root: Path, output_root: Path, mesh_root: P
 
 def extract_contacts(processed_root: Path, images_root: Path, contacts_root: Path, threshold: float, jobs: int) -> None:
     sys.path.insert(0, str(HERE / "arctic_preprocess"))
-    from extract_contacts_manually import process_sequence  # existing contact implementation
+    from extract_contacts_manually import process_sequence
 
     with open(Path(MANO_ROOT) / "MANO_LEFT.pkl", "rb") as handle:
         faces_left = pickle.load(handle, encoding="latin1")["f"]

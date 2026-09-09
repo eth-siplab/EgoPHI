@@ -9,6 +9,8 @@ env/
 # Training artifacts / large data (see README for how to obtain these)
 checkpoints/*.pth
 evaluation_results/
+visualizations_arctic/
+visualizations_h2o/
 wandb/
 
 # Editor / OS cruft
