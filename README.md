@@ -56,9 +56,10 @@ h2o_preprocess.py       end-to-end H2O preprocessing (resize, vertices, object p
 force_sim/              SOFA physics simulation that generates ARCTIC's force supervision
 ```
 
-For force supervision, run `force_sim/force_simulation_ARCTIC.py` (requires
-[SOFA](https://www.sofa-framework.org/) with the SofaPython3 plugin) before
-`arctic_preprocess.py`.
+For force supervision, download the precomputed per-vertex force data from
+HuggingFace and extract each into the matching path from `config.py`:
+- [arctic_force_simulations.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/arctic_force_simulations.zip) -> `config.PROCESSED_FORCE_ROOT`
+- [h2o_force_simulations.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/h2o_force_simulations.zip) -> `config.H2O_PROCESSED_FORCE_ROOT`
 
 #### Dependencies
 
@@ -101,8 +102,7 @@ Read `config.py` for the complete list and the expected on-disk data layout.
 
 Preprocessing produces everything the datasets/dataloaders read (resized
 224px images, hand/object segmentation masks, object rotation/translation/
-articulation, contact labels) -- run `force_sim/force_simulation_ARCTIC.py`
-first (see above) so force data is present.
+articulation, contact labels); force data comes separately, see above.
 
 ```bash
 python arctic_preprocess.py     # runs all stages: resize, contacts, metadata, segmentation
@@ -149,6 +149,10 @@ and evaluates on both the ARCTIC held-out participant and [H2O](https://taeinkwo
 for cross-dataset generalization -- see Dependencies above for download links,
 and Data preprocessing above for turning the raw downloads into the format
 the dataloaders expect.
+
+For sim-to-real evaluation, we also release [egophi_dataset.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/egophi_dataset.zip),
+our real-world recordings on two physical objects with dense object-mesh
+contact and force-magnitude ground truth.
 
 Citation
 ----------

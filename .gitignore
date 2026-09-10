@@ -13,6 +13,15 @@ visualizations_arctic/
 visualizations_h2o/
 wandb/
 
+# Internal-only preprocessing tooling and the empirical force-normalization
+# constants it depends on -- must not be published; forces are now
+# distributed pre-normalized via HuggingFace, see README
+dataset_ARCTIC_old.py
+dataset_H2O_old.py
+precompute_forces_arctic.py
+precompute_forces_h2o.py
+config_private.py
+
 # Editor / OS cruft
 .vscode/
 .idea/

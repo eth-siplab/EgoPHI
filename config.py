@@ -61,6 +61,10 @@ SEGMENT_ROOT = os.path.join("/local/home/anilic/arctic/render_out")
 CONTACTS_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "manually_extracted_contacts")
 FORCE_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "force_simulation", "final_force_simulations_0.02_0.02")
 FORCE_MIN_MAX_MAGNITUDE_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "force_simulation", "min_max_magnitude_per_folder")
+# Pre-normalized (magnitude/direction) forces -- see precompute_forces_arctic.py.
+# dataset_ARCTIC.py reads from here instead of normalizing FORCE_ROOT's raw
+# per-frame files itself.
+PROCESSED_FORCE_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "force_simulation", "arctic_force_simulations")
 DISTANCES_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "processed_distance")
 PROCESSED_SEQS_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "processed_verts", "seqs")
 GT_MANO_ROOT = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "extracted_GT_MANO_params")
@@ -72,15 +76,6 @@ OBJECT_CONTACT_STATS_DIR = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "ob
 OBJECT_MEANS_DIR = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "object_means")
 FORCE_MEANS_DIR = os.path.join(ARCTIC_DATA_ROOT, "data", "outputs", "force_means")
 
-# Global max force magnitudes used to normalize ARCTIC forces to [0, 1] --
-# empirically measured over the ARCTIC force dataset, kept as a named
-# constant instead of an inline magic number. Do not change these without
-# re-checking what any existing trained model expects.
-ARCTIC_FORCE_MAX_MAGNITUDE = {
-    'left': 40786.97325154768,
-    'right': 39529.099847565725,
-    'object': 10540.6126048457,
-}
 SOFA_FORCE_LOG_MAGNITUDE_STATS_JSON = os.path.join(PROJECT_ROOT, "SOFA_force_log_magnitude_stats.json")
 
 # --- Checkpoint filenames ----------------------------------------------------
@@ -113,15 +108,9 @@ H2O_CONTACTS_ROOT = os.environ.get(
   "/local/home/anilic/EgoPHI_old/HACO_RELEASE/outputs/contacts",
 )
 H2O_FORCE_ROOT = os.path.join(DATA_ROOT_H2O, "forces_rigid_0.04_0.04")
+# Pre-normalized (magnitude/direction) forces -- see precompute_forces_h2o.py.
+# dataset_H2O.py reads from here instead of normalizing H2O_FORCE_ROOT's raw
+# per-frame files itself.
+H2O_PROCESSED_FORCE_ROOT = os.path.join(DATA_ROOT_H2O, "h2o_force_simulations")
 H2O_ROT_TRANS_SCALE_ROOT = os.path.join(DATA_ROOT_H2O, "extracted_rot_trans_scale")
 H2O_HAMER_ROOT = os.path.join(DATA_ROOT_H2O, "HAMER_sipml3", "hamer_out")
-
-# Global max force magnitudes used to normalize H2O forces to [0, 1] --
-# empirically measured over the H2O force dataset, kept as named constants
-# instead of inline magic numbers. Do not change these without re-checking
-# what any existing trained model expects.
-H2O_FORCE_MAX_MAGNITUDE = {
-    'left': 139097.6954896031,
-    'right': 115636.71941756597,
-    'object': 8427.382710683385,
-}

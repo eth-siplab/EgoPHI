@@ -18,18 +18,6 @@ from torchvision.transforms.functional import to_tensor
 import config
 
 
-def mask_forces_with_contacts(forces: np.ndarray, contacts: np.ndarray, aLL_F, all_C, total_len) -> np.ndarray:
-    if forces.shape[:2] != contacts.shape[:2]:
-        raise ValueError(
-            f"Forces and contacts must have matching num_frames and num_vertices. "
-            f"Got forces.shape={forces.shape}, contacts.shape={contacts.shape}"
-            f"{aLL_F[0], aLL_F[-1]}"
-            f"{all_C}"
-            f"{total_len}"
-        )
-
-    return forces * contacts
-
 def get_total_memory_usage_mb():
     parent = psutil.Process(os.getpid())
     mem = parent.memory_info().rss
@@ -48,6 +36,7 @@ class ArcticSequenceDataset(Dataset):
                  mesh_root=config.MESH_ROOT,
                  GT_mano_root=config.GT_MANO_ROOT,
                  hamer_mano_root=config.HAMER_MANO_ROOT,
+                 processed_force_root=config.PROCESSED_FORCE_ROOT,
                  cameras=(0,),
                  sequence_length=128,
                  overlap=0,
@@ -62,6 +51,13 @@ class ArcticSequenceDataset(Dataset):
         sequence_length: how many frames per batch (default 128)
         transform: optional torchvision transform
         hamer_mano_root: path to precomputed HAMER MANO parameters
+        processed_force_root: path to the precomputed per-vertex force
+            magnitude/direction arrays produced by precompute_forces_arctic.py.
+            force_root's raw per-frame files are still scanned in __init__ to
+            build to_skip/cached_forces (used throughout this class for frame
+            reindexing, not just forces), but the forces returned by
+            _load_contacts are read from here instead of being normalized
+            on the fly.
         load_hamer: if True, __getitem__ also loads and returns the raw
             HAMER MANO parameters (pose/rot/shape/trans for both hands) and
             the source image path. Off by default so training (which
@@ -83,6 +79,7 @@ class ArcticSequenceDataset(Dataset):
         self.processed_seqs_root = processed_seqs_root
         self.mesh_root = mesh_root
         self.GT_mano_root = GT_mano_root
+        self.processed_force_root = processed_force_root
         self.cameras = [str(c) for c in cameras]
         self.sequence_length = sequence_length
         self.overlap = overlap
@@ -606,14 +603,17 @@ class ArcticSequenceDataset(Dataset):
         return torch.stack(left_out), torch.stack(right_out)
 
     def _load_contacts(self, participant, object_name, start_idx, length):
+        """
+        Contacts are read and reindexed (to_skip-filtered) here as before.
+        Forces are no longer normalized on the fly -- magnitude/direction are
+        read straight from precompute_forces_arctic.py's output, already
+        contact-masked, normalized, and reindexed the same way.
+        """
         contact_data = {}
         force_data = {}
         force_vector = {}
 
         contacts_dict = self.cached_contacts.get((participant, object_name), {})
-        forces_dict = self.cached_forces.get((participant, object_name), {})
-
-        min_max_folder = os.path.join(self.min_max_magnitude_path, participant, object_name)
 
         for suffix in ['left', 'right', 'object']:
             contact_path = contacts_dict.get(suffix, None)
@@ -622,41 +622,21 @@ class ArcticSequenceDataset(Dataset):
                 continue
 
             arr_contact = np.load(contact_path, mmap_mode='r')
-            total_len = len(arr_contact)
-
             valid_frame_ids = [i for i in range(len(arr_contact)) if (participant, object_name, i) not in self.to_skip]
             valid_frame_ids = np.array(valid_frame_ids, dtype=int)
             arr_contact_clean = arr_contact[valid_frame_ids]
 
             contact_data[suffix] = torch.from_numpy(arr_contact_clean[start_idx:start_idx+length]).float()
 
-            force_files = forces_dict.get(suffix, [])
-            if not force_files:
+            mag_path = os.path.join(self.processed_force_root, participant, f"{object_name}_{suffix}_magnitude.npy")
+            dir_path = os.path.join(self.processed_force_root, participant, f"{object_name}_{suffix}_direction.npy")
+            if not (os.path.isfile(mag_path) and os.path.isfile(dir_path)):
                 continue
-            force_files = [
-                path for path in force_files
-                if (participant, object_name,
-                    int(os.path.basename(path).split('_')[1].split('.')[0])) not in self.to_skip
-            ]
-            if not force_files:
-                continue
-            all_forces = np.stack([np.load(f, mmap_mode='r') for f in force_files], axis=0)
 
-            all_forces_masked = mask_forces_with_contacts(all_forces, arr_contact_clean, force_files, contact_path, total_len)
-            all_forces_masked = torch.from_numpy(all_forces_masked).float()
-
-            # --- Force magnitude normalization (0 to 1) ---
-            magnitudes = torch.norm(all_forces_masked, dim=2)  # [B, N_vertices]
-            max_mag = config.ARCTIC_FORCE_MAX_MAGNITUDE[suffix]
-            norm_magnitude = torch.clamp(magnitudes / max_mag, 0.0, 1.0)
-
-            # --- Force vector normalization (-1 to 1) ---
-            # Normalize to unit direction first, then clip (some directions may be slightly >1 due to noise)
-            direction = all_forces_masked / (magnitudes.unsqueeze(-1) + 1e-8)
-            direction = torch.clamp(direction, -1.0, 1.0)
-
-            force_data[suffix] = norm_magnitude[start_idx:start_idx+length]
-            force_vector[suffix] = direction[start_idx:start_idx+length]
+            magnitude = np.load(mag_path, mmap_mode='r')
+            direction = np.load(dir_path, mmap_mode='r')
+            force_data[suffix] = torch.from_numpy(np.asarray(magnitude[start_idx:start_idx+length])).float()
+            force_vector[suffix] = torch.from_numpy(np.asarray(direction[start_idx:start_idx+length])).float()
 
         return contact_data, force_data, force_vector
 

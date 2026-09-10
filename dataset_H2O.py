@@ -22,24 +22,12 @@ from torchvision.io import read_image
 import config
 
 
-def mask_forces_with_contacts(forces: np.ndarray, contacts: np.ndarray, aLL_F, all_C, total_len) -> np.ndarray:
-    if forces.shape[:2] != contacts.shape[:2]:
-        raise ValueError(
-            f"Forces and contacts must have matching num_frames and num_vertices. "
-            f"Got forces.shape={forces.shape}, contacts.shape={contacts.shape}"
-            f"{aLL_F[0], aLL_F[-1]}"
-            f"{all_C}"
-            f"{total_len}"
-        )
-    # Broadcast contacts (num_frames, num_vertices, 1) -> (num_frames, num_vertices, 3)
-    return forces * contacts
-
-
 class H2OSequenceDataset(Dataset):
     def __init__(self,
                  images_root=config.H2O_IMAGES_ROOT,
                  contacts_root=config.H2O_CONTACTS_ROOT,
                  force_root=config.H2O_FORCE_ROOT,
+                 processed_force_root=config.H2O_PROCESSED_FORCE_ROOT,
                  cameras=(0,),
                  sequence_length=1,
                  overlap=0,
@@ -48,6 +36,13 @@ class H2OSequenceDataset(Dataset):
         images_root: H2O data root (contains subject*/h*/trial/cam*/rgb224, object_mask224, ...)
         contacts_root: root of processed H2O hand-object contacts
         force_root: root of processed H2O per-vertex forces
+        processed_force_root: path to the precomputed per-vertex force
+            magnitude/direction arrays produced by precompute_forces_h2o.py.
+            force_root's raw per-frame files are still scanned in __init__ to
+            build to_skip/cached_forces (used throughout this class for frame
+            reindexing, not just forces), but the forces returned by
+            _load_contacts are read from here instead of being normalized
+            on the fly.
         cameras: list of camera indices (H2O eval currently always uses one)
         sequence_length: frames per sample (H2O eval uses 1 -- single frames)
         subjects: optional list of subject IDs (e.g. ['subject4_ego']) to
@@ -57,6 +52,7 @@ class H2OSequenceDataset(Dataset):
         self.images_root = images_root
         self.contacts_root = contacts_root
         self.force_root = force_root
+        self.processed_force_root = processed_force_root
         self.rot_trans_scale_root = config.H2O_ROT_TRANS_SCALE_ROOT
         self.hamer_root = config.H2O_HAMER_ROOT
 
@@ -316,12 +312,17 @@ class H2OSequenceDataset(Dataset):
         )
 
     def _load_contacts(self, participant, object_name, start_idx, length):
+        """
+        Contacts are read and reindexed (to_skip-filtered) here as before.
+        Forces are no longer normalized on the fly -- magnitude/direction are
+        read straight from precompute_forces_h2o.py's output, already
+        contact-masked, normalized, and reindexed the same way.
+        """
         contact_data = {}
         force_data = {}
         force_vector = {}
 
         contacts_dict = self.cached_contacts.get((participant, object_name), {})
-        forces_dict = self.cached_forces.get((participant, object_name), {})
 
         for suffix in ['left', 'right', 'object']:
             contact_path = contacts_dict.get(suffix, None)
@@ -330,34 +331,24 @@ class H2OSequenceDataset(Dataset):
                 continue
 
             arr_contact = np.load(contact_path, mmap_mode='r')
-            total_len = len(arr_contact)
-
             valid_frame_ids = [i for i in range(len(arr_contact)) if (participant, object_name, i) not in self.to_skip]
             valid_frame_ids = np.array(valid_frame_ids, dtype=int)
             arr_contact_clean = arr_contact[valid_frame_ids]
 
             contact_data[suffix] = torch.from_numpy(arr_contact_clean[start_idx:start_idx + length]).float()
 
-            force_files = forces_dict.get(suffix, [])
-            if not force_files:
+            # object_name is already the full "<subject>/<hand_obj>/<trial>/<cam>"
+            # relative path (see __init__), matching precompute_forces_h2o.py's
+            # output nesting.
+            mag_path = os.path.join(self.processed_force_root, object_name, f"{suffix}_magnitude.npy")
+            dir_path = os.path.join(self.processed_force_root, object_name, f"{suffix}_direction.npy")
+            if not (os.path.isfile(mag_path) and os.path.isfile(dir_path)):
                 continue
-            all_forces = np.stack([np.load(f, mmap_mode='r') for f in force_files], axis=0)
-            all_forces = all_forces[valid_frame_ids]
 
-            all_forces_masked = mask_forces_with_contacts(all_forces, arr_contact_clean, force_files, contact_path, total_len)
-            all_forces_masked = torch.from_numpy(all_forces_masked).float()
-
-            # --- Force magnitude normalization to [0, 1] using global max magnitudes ---
-            magnitudes = torch.norm(all_forces_masked, dim=2)  # [B, N_vertices]
-            max_mag = config.H2O_FORCE_MAX_MAGNITUDE[suffix]
-            norm_magnitude = torch.clamp(magnitudes / max_mag, 0.0, 1.0)
-
-            # --- Force vector normalization to [-1, 1] ---
-            direction = all_forces_masked / (magnitudes.unsqueeze(-1) + 1e-8)
-            direction = torch.clamp(direction, -1.0, 1.0)
-
-            force_data[suffix] = norm_magnitude[start_idx:start_idx + length]
-            force_vector[suffix] = direction[start_idx:start_idx + length]
+            magnitude = np.load(mag_path, mmap_mode='r')
+            direction = np.load(dir_path, mmap_mode='r')
+            force_data[suffix] = torch.from_numpy(np.asarray(magnitude[start_idx:start_idx + length])).float()
+            force_vector[suffix] = torch.from_numpy(np.asarray(direction[start_idx:start_idx + length])).float()
 
         return contact_data, force_data, force_vector
 
