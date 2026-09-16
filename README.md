@@ -58,8 +58,8 @@ force_sim/              SOFA physics simulation that generates ARCTIC's force su
 
 For force supervision, download the precomputed per-vertex force data from
 HuggingFace and extract each into the matching path from `config.py`:
-- [arctic_force_simulations.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/arctic_force_simulations.zip) -> `config.PROCESSED_FORCE_ROOT`
-- [h2o_force_simulations.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/h2o_force_simulations.zip) -> `config.H2O_PROCESSED_FORCE_ROOT`
+- [arctic_force_simulations.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/blob/main/arctic_force_simulations.zip) -> `config.PROCESSED_FORCE_ROOT`
+- [h2o_force_simulations.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/blob/main/h2o_force_simulations.zip) -> `config.H2O_PROCESSED_FORCE_ROOT`
 
 #### Dependencies
 
@@ -150,7 +150,7 @@ for cross-dataset generalization -- see Dependencies above for download links,
 and Data preprocessing above for turning the raw downloads into the format
 the dataloaders expect.
 
-For sim-to-real evaluation, we also release [egophi_dataset.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/egophi_dataset.zip),
+For sim-to-real evaluation, we also release [egophi_dataset.zip](https://huggingface.co/datasets/eth-siplab/EgoPHI/blob/main/egophi_dataset.zip),
 our real-world recordings on two physical objects with dense object-mesh
 contact and force-magnitude ground truth.
 
