@@ -76,8 +76,8 @@ HuggingFace and extract each into the matching path from `config.py`:
    the default location (see Configuration below).
 3. Download the [ARCTIC](https://github.com/zc-alexfan/arctic/blob/master/docs/data/README.md) dataset.
 4. Download the [H2O](https://taeinkwon.com/projects/h2o/) dataset.
-5. Download pretrained weights from [here]() and place `best_EgoPHI.pth` (and
-   optionally `last_EgoPHI.pth`) under `checkpoints/`.
+5. Download pretrained weights from [here](https://drive.google.com/file/d/11LB9t2f_4m4KuAmVis5d-KAdmkKGbmEc/view?usp=sharing) and place `best_EgoPHI.pth` (and
+   optionally `last_EgoPHI.pth` [here](https://drive.google.com/file/d/1ppcVAB5XMbP13LJxL9E9skI2yuqeBKhc/view?usp=sharing)) under `checkpoints/`.
 
 #### Configuration
 
