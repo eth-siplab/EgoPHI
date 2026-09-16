@@ -158,8 +158,13 @@ Citation
 ----------
 If you find our paper or codes useful, please cite our work:
 
-    @article{
-     }
+@inproceedings{ilic2026egophi,
+  title     = {EgoPHI: Estimating 3D Hand-Object Contact and Force from Egocentric Vision},
+  author    = {Ilic, Andela and Schuchert, Rachel and Jiang, Yijing and Holz, Christian},
+  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+  pages     = {410--428},
+  year      = {2026}
+}
 
 
 License and Acknowledgement
